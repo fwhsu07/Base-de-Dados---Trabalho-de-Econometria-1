@@ -191,10 +191,10 @@ modelo_transf_sem_centrar <- lm(
     log_pop + lfp_rate + pop_urban,
   data = dados_limpos
 )
-cat("Inflexão (transf sem centrar): ",
+cat("vertice (transf sem centrar): ",
     -coef(modelo_transf_sem_centrar)["emp_services"] /
       (2 * coef(modelo_transf_sem_centrar)["emp_services_sq"]), "\n")
-cat("Inflexão (transf centrado):    ",
+cat("vertice (transf centrado):    ",
     media_serv - coef(modelo_transf)["emp_services_c"] /
       (2 * coef(modelo_transf)["emp_services_c_sq"]), "\n")
 
@@ -263,9 +263,9 @@ waldtest(modelo_restrito_transf, modelo_transf,
 
 waldtest(modelo_restrito_serv, modelo_transf,
          vcov = vcovHC(modelo_transf, type = "HC1"))
-# ============================================================
+
 # 5.5 VERIFICAÇÃO HC1 vs HC3
-# ============================================================
+
 cat("\n--- modelo_transf | HC1 ---\n")
 print(coeftest(modelo_transf, vcov. = vcovHC(modelo_transf, type = "HC1")))
 
@@ -286,9 +286,9 @@ cat("\n--- Wald HC3: serviços ---\n")
 print(waldtest(modelo_restrito_serv, modelo_transf,
                vcov = vcovHC(modelo_transf, type = "HC3")))
 
-# ============================================================
+
 # 5.6 NOTA METODOLÓGICA (texto para a tese, não é código)
-# ============================================================
+
 # Erros robustos (HC1/HC3) corrigem APENAS a inferência diante de
 # heterocedasticidade. NÃO corrigem:
 #   - variáveis omitidas
@@ -333,9 +333,9 @@ regressores <- c("bank_branches", "emp_services", "emp_services_sq",
 round(cor(dados_limpos[, regressores], use = "complete.obs"), 2)
 vif(modelo_controle)
 
-# ============================================================
+
 # 5.7 DIAGNÓSTICO DE COLINEARIDADE ENTRE BLOCOS
-# ============================================================
+
 cat("\n--- Correlações entre internet, urbanização e serviços ---\n")
 print(round(cor(dados_limpos[, c("internet_use", "pop_urban", "emp_services",
                                  "emp_services_c", "emp_services_c_sq")],
@@ -369,9 +369,9 @@ res_y <- resid(lm(gdp_pc_emp ~ internet_use + pop_urban, data = dados_limpos))
 res_x <- resid(lm(emp_services ~ internet_use + pop_urban, data = dados_limpos))
 print(cor(res_y, res_x))
 
-# ============================================================
+
 # 9. HETEROGENEIDADE — interação bancos × internet
-# ============================================================
+
 # Modelo com interação (mesma especificação do modelo_transf + interação)
 modelo_interacao <- lm(
   gdp_pc_emp ~ bank_branches * internet_use +
@@ -405,9 +405,8 @@ for (x in c(20, 50, 80, 95)) {
       round(b1 + b12 * x, 2), "\n")
 }
 
-# ============================================================
 # 9b. (EXPLORATÓRIO) Bancos: com vs. sem internet
-# ============================================================
+
 modelo_sem_internet <- lm(
   gdp_pc_emp ~ bank_branches + emp_services_c + emp_services_c_sq +
     elec_access + school_ter +
@@ -427,9 +426,8 @@ cat("Sem internet:                  ",
     round(sqrt(vcovHC(modelo_sem_internet, type = "HC1")["bank_branches","bank_branches"]), 2),
     "\n")
 
-# ============================================================
+
 # 9c. (EXPLORATÓRIO) Quartis de internet — mantido como complementar
-# ============================================================
 dados_limpos <- dados_limpos %>%
   mutate(grupo_net = ntile(internet_use, 4))
 
@@ -443,9 +441,8 @@ for (g in 1:4) {
 }
 
 
-# ============================================================
 # 10. ANÁLISE DE INFLUÊNCIA
-# ============================================================
+
 cooksd    <- cooks.distance(modelo_transf)
 leverage  <- hatvalues(modelo_transf)
 resid_st  <- rstudent(modelo_transf)
@@ -495,9 +492,9 @@ print(data.frame(
   com_todos      = coef(modelo_transf)[vars_comp],
   sem_influentes = coef(modelo_sem_influentes)[vars_comp]
 ))
-# ============================================================
+
 # 11. SPEARMAN + GRÁFICOS DIAGNÓSTICOS
-# ============================================================
+
 # Spearman como complemento a Pearson
 cat("\n--- Spearman ---\n")
 print(round(cor(dados_limpos[, vars], method = "spearman",
@@ -579,4 +576,46 @@ stats_agregados <- dados_com_agregados %>%
   mutate(grupo = "Países + agregados", n = nrow(dados_com_agregados), .before = 1)
 
 print(rbind(stats_paises, stats_agregados))
+
+# 12. MAGNITUDES ECONÔMICAS (seções 4.2, 4.3 e 5.1 do texto)
+V      <- vcovHC(modelo_transf, type = "HC1")
+b      <- coef(modelo_transf)
+tc     <- qt(0.975, df.residual(modelo_transf))
+media_y <- mean(dados_limpos$gdp_pc_emp)
+dp_y    <- sd(dados_limpos$gdp_pc_emp)
+dp_b    <- sd(dados_limpos$bank_branches)
+dp_net  <- sd(dados_limpos$internet_use)
+# 12.1 Agências: uma unidade, um desvio-padrão, IC de 95%
+cat("\n--- Agências ---\n")
+cat("1 agência / média:", b["bank_branches"] / media_y, "\n")
+cat("1 d.p. (US$):", b["bank_branches"] * dp_b,
+    "| % da média:", b["bank_branches"] * dp_b / media_y,
+    "| em d.p. de Y:", b["bank_branches"] * dp_b / dp_y, "\n")
+ic <- b["bank_branches"] + c(-1, 1) * tc * sqrt(V["bank_branches", "bank_branches"])
+cat("IC 95% (por agência):", ic, "\n")
+cat("IC 95% (1 d.p., % da média):", ic * dp_b / media_y, "\n")
+cat("Internet, 1 d.p. (US$):", b["internet_use"] * dp_net, "\n")
+modelo_sem_lux <- update(modelo_transf,
+                         data = subset(dados_limpos, `Country Code` != "LUX"))
+cat("Sem LUX: coef =", coef(modelo_sem_lux)["bank_branches"],
+    "| 1 d.p. =", coef(modelo_sem_lux)["bank_branches"] * dp_b,
+    "| % da média =", coef(modelo_sem_lux)["bank_branches"] * dp_b / media_y, "\n")
+# 12.2 Serviços: efeito parcial com IC (método delta, HC1)
+cat("\n--- Efeito parcial dos serviços ---\n")
+for (S in c(20, 40, 60, 80)) {
+  c0  <- S - media_serv
+  w   <- c(emp_services_c = 1, emp_services_c_sq = 2 * c0)
+  me  <- sum(w * b[names(w)])
+  se  <- sqrt(as.numeric(t(w) %*% V[names(w), names(w)] %*% w))
+  cat(S, "% | efeito:", round(me), "| % da média:", round(me / media_y * 100, 1),
+      "| IC 95%:", round(me - tc * se), round(me + tc * se), "\n")
+}
+cat("Países com serviços < 30%:", sum(dados_limpos$emp_services < 30),
+    "| >= 80%:", sum(dados_limpos$emp_services >= 80), "\n")
+# 12.3 Modelo em log: efeito parcial (semielasticidade) por nível
+bl <- coef(modelo_log_y)
+for (S in c(20, 40, 60, 80)) {
+  c0 <- S - media_serv
+  cat("log |", S, "% :", bl["emp_services_c"] + 2 * bl["emp_services_c_sq"] * c0, "\n")
+}
 
